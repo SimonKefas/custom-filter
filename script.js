@@ -69,6 +69,7 @@ function collectItemData(container) {
       const cats = el.getAttribute('custom-filter-field').split(',').map(c => c.trim());
       cats.forEach(cat => {
         fields[cat] = fields[cat] || [];
+        // We store everything in lowercase for easy matching
         fields[cat].push(el.textContent.toLowerCase().trim());
       });
     });
@@ -77,9 +78,8 @@ function collectItemData(container) {
 }
 
 /**
- * Auto-populate filters:
- *   - data-auto-type="select" or "checkbox" or "radio"
- *   - Possibly data-auto-template
+ * Auto-populate filters (checkbox/radio/select),
+ * skipping empty values, plus optional template-based approach.
  */
 function setupAutoPopulatedFilters() {
   const autoFilters = filterContainer.querySelectorAll('[custom-filter-auto]');
@@ -110,7 +110,7 @@ function setupAutoPopulatedFilters() {
   });
 }
 
-/** Simple approach: fill a <select> or generate label+checkbox/radio from scratch */
+/** Fill a <select> or build label+checkbox/radio from scratch. */
 function autoPopulateSimple(autoEl, category, autoType, sortedValues) {
   if (autoType === 'select') {
     if (autoEl.tagName.toLowerCase() === 'select') {
@@ -118,7 +118,7 @@ function autoPopulateSimple(autoEl, category, autoType, sortedValues) {
       // Default placeholder
       const def = document.createElement('option');
       def.value = '';
-      def.textContent = 'Select...';
+      def.textContent = 'Alle';
       autoEl.appendChild(def);
 
       sortedValues.forEach((val, index) => {
@@ -171,7 +171,7 @@ function autoPopulateSimple(autoEl, category, autoType, sortedValues) {
   }
 }
 
-/** Template-based duplication approach */
+/** Template-based approach (if data-auto-template is used). */
 function autoPopulateWithTemplate(autoEl, category, autoType, sortedValues) {
   const templateItem = autoEl.querySelector('[data-auto-template-item]');
   if (!templateItem) {
@@ -220,7 +220,6 @@ function autoPopulateWithTemplate(autoEl, category, autoType, sortedValues) {
 
 /**
  * Setup range sliders: data-slider-mode="range" or "minonly"
- * data-slider-tagname to rename the label in the active tag
  */
 function setupRangeSliders() {
   if (!window.noUiSlider) {
@@ -364,9 +363,21 @@ function getActiveFilters() {
     }
   });
 
-  // Other inputs (text, select, date, range)
+  // ================ WILDCARD ADDITION HERE ================
+  // If there's an input with custom-filter-field="*"
+  const wildcardInput = filterContainer.querySelector('input[custom-filter-field="*"], textarea[custom-filter-field="*"], select[custom-filter-field="*"]');
+  if (wildcardInput && wildcardInput.value.trim() !== '') {
+    const typed = wildcardInput.value.trim().toLowerCase();
+    if (!filters['*']) filters['*'] = { type: 'text', values: [] };
+    filters['*'].values.push(typed);
+  }
+  // ========================================================
+
+  // Other inputs (text, select, date, range) except the wildcard
   const otherInputs = filterContainer.querySelectorAll(
-    'input[custom-filter-field]:not([type="checkbox"]):not([type="radio"]), select[custom-filter-field], textarea[custom-filter-field]'
+    'input[custom-filter-field]:not([type="checkbox"]):not([type="radio"]):not([custom-filter-field="*"]), \
+     select[custom-filter-field]:not([custom-filter-field="*"]), \
+     textarea[custom-filter-field]:not([custom-filter-field="*"])'
   );
   otherInputs.forEach(input => {
     const cats = input.getAttribute('custom-filter-field').split(',').map(c => c.trim());
@@ -424,11 +435,29 @@ function checkItemAgainstFilters(fields, filters) {
     const itemValues = fields[cat] || [];
 
     if (filter.type === 'text') {
-      const logicMode = filter.logic || 'OR';
 
+      // ================ WILDCARD ADDITION HERE ================
+      if (cat === '*') {
+        // For wildcard, we combine ALL fields in "fields"
+        let combinedText = Object.keys(fields)
+          .map(k => fields[k].join(' ')) // fields[k] is array of text
+          .join(' ')
+          .toLowerCase(); // ensure lowercase
+
+        // If user typed multiple search terms, all must appear
+        for (const typedTerm of filter.values) {
+          if (!combinedText.includes(typedTerm)) {
+            return false;
+          }
+        }
+        continue; // done checking wildcard, go to next cat
+      }
+      // ========================================================
+
+      // Normal category text logic
+      const logicMode = filter.logic || 'OR';
       if (filter.values.length > 1) {
         if (logicMode === 'AND') {
-          // must contain ALL
           for (const val of filter.values) {
             if (!itemValues.some(iv => iv.includes(val))) {
               return false;
@@ -486,8 +515,19 @@ function updateActiveTags(filters) {
     const filter = filters[cat];
 
     if (filter.type === 'text') {
+      // If it's '*', we skip normal logic or just show the typed search
+      if (cat === '*') {
+        // e.g. user typed "beach"
+        // filter.values might have multiple terms if you want multi-phrase
+        filter.values.forEach(searchTerm => {
+          const newTag = createTagElement(template, cat, searchTerm, false, null);
+          tagsWrapper.appendChild(newTag);
+        });
+        continue;
+      }
+
       filter.values.forEach((val, i) => {
-        const inputId = filter.ids[i] || null;
+        const inputId = filter.ids?.[i] || null;
         const newTag = createTagElement(template, cat, val, false, inputId);
         tagsWrapper.appendChild(newTag);
       });
@@ -496,18 +536,18 @@ function updateActiveTags(filters) {
       const fromVal = !isNaN(filter.from) ? filter.from : '';
       const toVal   = !isNaN(filter.to)   ? filter.to   : '';
 
-      // Let's detect if minonly to show "Min xyz"
+      // Possibly detect minonly
       const sliderEl = document.querySelector(`.my-range-slider[data-slider-category="${cat}"]`);
       const mode     = sliderEl?.getAttribute('data-slider-mode') || 'range';
       const label    = sliderEl?.getAttribute('data-slider-tagname') || cat;
 
       let displayText;
       if (mode === 'minonly') {
-        // Show single value
+        // single
         const val = fromVal || '...';
-        displayText = `Min. ${label}: ${val}`;
+        displayText = `Min ${label}: ${val}`;
       } else {
-        // Normal two-handle
+        // two-handle
         displayText = `${label}: ${fromVal || '...'} - ${toVal || '...'}`;
       }
 
@@ -515,18 +555,15 @@ function updateActiveTags(filters) {
       tagsWrapper.appendChild(newTag);
     }
     else if (cat === '*') {
-      filter.values.forEach(val => {
-        const newTag = createTagElement(template, cat, val);
+      // If we didn't handle above, we can do it here
+      filter.values.forEach(searchTerm => {
+        const newTag = createTagElement(template, cat, searchTerm);
         tagsWrapper.appendChild(newTag);
       });
     }
   }
 }
 
-/**
- * Create a cloned tag. If it's range or date, we pass isRangeOrDate = true.
- * We also pass inputId for checkboxes/radios, so removing the tag can uncheck it.
- */
 function createTagElement(template, cat, val, isRangeOrDate = false, inputId = null) {
   const newTag = template.cloneNode(true);
   newTag.setAttribute('custom-filter-tag', 'active');
@@ -719,7 +756,7 @@ function clearCategoryFilter(category) {
   applyFilters();
 }
 
-/** Utility for capitalizing strings. */
+/** Utility for capitalizing. */
 function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
