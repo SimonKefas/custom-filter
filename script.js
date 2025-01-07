@@ -505,7 +505,7 @@ function updateActiveTags(filters) {
       if (mode === 'minonly') {
         // Show single value
         const val = fromVal || '...';
-        displayText = `Min ${label}: ${val}`;
+        displayText = `Min. ${label}: ${val}`;
       } else {
         // Normal two-handle
         displayText = `${label}: ${fromVal || '...'} - ${toVal || '...'}`;
