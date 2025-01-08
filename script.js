@@ -9,10 +9,11 @@ let itemData = [];
 function initializeFilters() {
   console.log('[DEBUG] initializeFilters() called.');
 
+  // Find your containers
   filterContainer = document.querySelector('[custom-filter="filters"]');
   listContainer   = document.querySelector('[custom-filter="list"]');
   if (!filterContainer || !listContainer) {
-    console.warn('[DEBUG] Missing filter or list container.');
+    console.warn('[DEBUG] Missing filter container or list container.');
     return;
   }
 
@@ -20,27 +21,31 @@ function initializeFilters() {
   itemData = collectItemData(listContainer);
   console.log('[DEBUG] itemData:', itemData);
 
-  // 2) Auto-populate filters (checkbox, radio, select)
+  // 2) Auto-populate filters (checkbox/radio/select if needed)
   setupAutoPopulatedFilters();
 
-  // 3) Setup range sliders (minonly or range)
+  // 3) Setup range sliders
   setupRangeSliders();
 
   // 4) Listen for input/change
   const formHasSubmit = filterContainer.querySelector('[custom-filter-submit="true"]');
   if (formHasSubmit) {
+    // If you have a form-based approach
     filterContainer.addEventListener('submit', e => {
       e.preventDefault();
       applyFilters();
     });
   } else {
+    // Otherwise, filter on any input/change event
     filterContainer.addEventListener('input', () => applyFilters());
     filterContainer.addEventListener('change', () => applyFilters());
   }
 
-  // 5) Clear filters
+  // 5) "Clear All" and "Clear Category" Buttons
+  // Make sure the button is inside filterContainer or modify the query if it's outside
   filterContainer.querySelectorAll('[custom-filter-clear="all"]').forEach(btn => {
     btn.addEventListener('click', () => {
+      console.log('[DEBUG] "Clear All" button clicked');
       resetAllFilters();
       applyFilters();
     });
@@ -48,6 +53,7 @@ function initializeFilters() {
   filterContainer.querySelectorAll('[custom-filter-clear]:not([custom-filter-clear="all"])').forEach(btn => {
     const cat = btn.getAttribute('custom-filter-clear');
     btn.addEventListener('click', () => {
+      console.log(`[DEBUG] Clearing category: ${cat}`);
       clearCategoryFilter(cat);
       applyFilters();
     });
@@ -69,7 +75,7 @@ function collectItemData(container) {
       const cats = el.getAttribute('custom-filter-field').split(',').map(c => c.trim());
       cats.forEach(cat => {
         fields[cat] = fields[cat] || [];
-        // We store everything in lowercase for easy matching
+        // Convert text to lowercase for easier matching
         fields[cat].push(el.textContent.toLowerCase().trim());
       });
     });
@@ -78,8 +84,8 @@ function collectItemData(container) {
 }
 
 /**
- * Auto-populate filters (checkbox/radio/select),
- * skipping empty values, plus optional template-based approach.
+ * Auto-populate filters (e.g. a <select>, or checkboxes/radios),
+ * skipping empty data values. Optionally use data-auto-template.
  */
 function setupAutoPopulatedFilters() {
   const autoFilters = filterContainer.querySelectorAll('[custom-filter-auto]');
@@ -88,7 +94,7 @@ function setupAutoPopulatedFilters() {
     const autoType    = autoEl.getAttribute('data-auto-type') || 'select';
     const useTemplate = autoEl.hasAttribute('data-auto-template');
 
-    // Gather unique values
+    // Gather unique values for this category
     const uniqueVals = new Set();
     itemData.forEach(item => {
       if (item.fields[category]) {
@@ -98,7 +104,7 @@ function setupAutoPopulatedFilters() {
     const sortedVals = [...uniqueVals].sort();
 
     if (sortedVals.length === 0) {
-      console.log(`[DEBUG] No values found for category "${category}". Skipping auto-population.`);
+      console.log(`[DEBUG] No values for category "${category}". Skipping auto-population.`);
       return;
     }
 
@@ -110,26 +116,27 @@ function setupAutoPopulatedFilters() {
   });
 }
 
-/** Fill a <select> or build label+checkbox/radio from scratch. */
+/** Simple approach: fill a <select> or build label+checkbox/radio from scratch */
 function autoPopulateSimple(autoEl, category, autoType, sortedValues) {
   if (autoType === 'select') {
+    // Expect autoEl to be a <select>
     if (autoEl.tagName.toLowerCase() === 'select') {
       autoEl.innerHTML = '';
-      // Default placeholder
+      // Insert a default placeholder
       const def = document.createElement('option');
       def.value = '';
-      def.textContent = 'Alle';
+      def.textContent = 'Alle';  // or "All", "Select"
       autoEl.appendChild(def);
 
       sortedValues.forEach((val, index) => {
-        if (!val.trim()) return;
+        if (!val.trim()) return; // skip empty
         const opt = document.createElement('option');
         opt.value = val;
         opt.textContent = capitalize(val);
         autoEl.appendChild(opt);
       });
 
-      // Ensure custom-filter-field if missing
+      // Ensure it has custom-filter-field if missing
       if (!autoEl.hasAttribute('custom-filter-field')) {
         autoEl.setAttribute('custom-filter-field', category);
       }
@@ -138,6 +145,7 @@ function autoPopulateSimple(autoEl, category, autoType, sortedValues) {
     }
   }
   else if (autoType === 'checkbox' || autoType === 'radio') {
+    // Generate checkboxes/radios
     autoEl.innerHTML = '';
     sortedValues.forEach((val, index) => {
       if (!val.trim()) return; // skip empty
@@ -151,10 +159,10 @@ function autoPopulateSimple(autoEl, category, autoType, sortedValues) {
 
       const input = document.createElement('input');
       input.type = autoType;
-      // unique ID
       const uniqueId = `checkbox-${category}-${index}`;
       input.id = uniqueId;
       input.value = val;
+      // Hide the real input per Webflow style
       input.style.opacity = '0';
       input.style.position = 'absolute';
       input.style.zIndex   = '-1';
@@ -171,7 +179,7 @@ function autoPopulateSimple(autoEl, category, autoType, sortedValues) {
   }
 }
 
-/** Template-based approach (if data-auto-template is used). */
+/** Template-based approach if data-auto-template is used. */
 function autoPopulateWithTemplate(autoEl, category, autoType, sortedValues) {
   const templateItem = autoEl.querySelector('[data-auto-template-item]');
   if (!templateItem) {
@@ -179,7 +187,7 @@ function autoPopulateWithTemplate(autoEl, category, autoType, sortedValues) {
     return;
   }
 
-  // Remove siblings except template
+  // Remove siblings except the template
   const siblings = [...autoEl.children].filter(ch => ch !== templateItem);
   siblings.forEach(sib => sib.remove());
 
@@ -189,7 +197,7 @@ function autoPopulateWithTemplate(autoEl, category, autoType, sortedValues) {
     const clone = templateItem.cloneNode(true);
     clone.style.display = 'block';
 
-    // Possibly remove "w--redirected-checked" from the template's .w-checkbox-input
+    // Remove "checked" style if the template had it
     const wfCheckboxDiv = clone.querySelector('.w-checkbox-input');
     if (wfCheckboxDiv && wfCheckboxDiv.classList.contains('w--redirected-checked')) {
       wfCheckboxDiv.classList.remove('w--redirected-checked');
@@ -219,18 +227,19 @@ function autoPopulateWithTemplate(autoEl, category, autoType, sortedValues) {
 }
 
 /**
- * Setup range sliders: data-slider-mode="range" or "minonly"
+ * Setup range sliders: data-slider-mode="range" or "minonly".
+ * data-slider-tagname: name used in active tags.
  */
 function setupRangeSliders() {
   if (!window.noUiSlider) {
-    console.warn('[DEBUG] noUiSlider not found, skipping slider setup.');
+    console.warn('[DEBUG] noUiSlider not found, skipping slider creation.');
     return;
   }
 
   const sliders = filterContainer.querySelectorAll('.my-range-slider');
   sliders.forEach(sliderEl => {
-    const category     = sliderEl.getAttribute('data-slider-category') || 'undefined';
-    const mode         = sliderEl.getAttribute('data-slider-mode') || 'range';
+    const category = sliderEl.getAttribute('data-slider-category') || 'undefined';
+    const mode     = sliderEl.getAttribute('data-slider-mode') || 'range';
     const tooltipUnit  = sliderEl.getAttribute('data-tooltip') || '';
     const customTagName= sliderEl.getAttribute('data-slider-tagname') || category;
 
@@ -269,7 +278,7 @@ function setupRangeSliders() {
       if (mode === 'minonly') {
         const val = parseFloat(values[0]) || 0;
         if (fromInput) fromInput.value = val;
-        if (toInput)   toInput.value   = Number.MAX_SAFE_INTEGER;
+        if (toInput)   toInput.value   = Number.MAX_SAFE_INTEGER; // effectively infinite
       } else {
         const valFrom = parseFloat(values[0]) || 0;
         const valTo   = parseFloat(values[1]) || 0;
@@ -337,13 +346,13 @@ function applyFilters() {
 }
 
 /**
- * Gather currently active filters, storing text values & unique IDs
- * Also handle data-checkbox-logic="all" => AND logic
+ * Gather currently active filters. 
+ * Also handle wildcard (custom-filter-field="*") and data-checkbox-logic="all".
  */
 function getActiveFilters() {
   const filters = {};
 
-  // Checkboxes/radios
+  // 1) Checkboxes/radios
   const checkboxes = filterContainer.querySelectorAll('input[type="checkbox"], input[type="radio"]');
   checkboxes.forEach(input => {
     if (input.checked) {
@@ -363,17 +372,15 @@ function getActiveFilters() {
     }
   });
 
-  // ================ WILDCARD ADDITION HERE ================
-  // If there's an input with custom-filter-field="*"
-  const wildcardInput = filterContainer.querySelector('input[custom-filter-field="*"], textarea[custom-filter-field="*"], select[custom-filter-field="*"]');
+  // 2) Wildcard input: custom-filter-field="*"
+  const wildcardInput = filterContainer.querySelector('input[custom-filter-field="*"], select[custom-filter-field="*"], textarea[custom-filter-field="*"]');
   if (wildcardInput && wildcardInput.value.trim() !== '') {
     const typed = wildcardInput.value.trim().toLowerCase();
     if (!filters['*']) filters['*'] = { type: 'text', values: [] };
     filters['*'].values.push(typed);
   }
-  // ========================================================
 
-  // Other inputs (text, select, date, range) except the wildcard
+  // 3) Other text/select/date/range inputs (excluding wildcard)
   const otherInputs = filterContainer.querySelectorAll(
     'input[custom-filter-field]:not([type="checkbox"]):not([type="radio"]):not([custom-filter-field="*"]), \
      select[custom-filter-field]:not([custom-filter-field="*"]), \
@@ -382,6 +389,7 @@ function getActiveFilters() {
   otherInputs.forEach(input => {
     const cats = input.getAttribute('custom-filter-field').split(',').map(c => c.trim());
     const val  = input.value.trim();
+
     cats.forEach(cat => {
       if (!filters[cat]) filters[cat] = { type: 'text', values: [], ids: [] };
 
@@ -401,16 +409,16 @@ function getActiveFilters() {
     });
   });
 
-  // data-checkbox-logic
+  // 4) data-checkbox-logic => "all" for AND logic
   document.querySelectorAll('[custom-filter-auto]').forEach(el => {
     const cat = el.getAttribute('custom-filter-auto');
-    const logicAttr = el.getAttribute('data-checkbox-logic'); // "all" or "any"
+    const logicAttr = el.getAttribute('data-checkbox-logic'); 
     if (filters[cat] && logicAttr) {
       filters[cat].logic = (logicAttr.toLowerCase() === 'all') ? 'AND' : 'OR';
     }
   });
 
-  // Clean out empties
+  // 5) Clean out empties
   for (const cat in filters) {
     const f = filters[cat];
     if (f.type === 'text' && f.values.length === 0) {
@@ -419,7 +427,7 @@ function getActiveFilters() {
     if (f.type === 'date' && !f.from && !f.to) {
       delete filters[cat];
     }
-    if (f.type === 'range' && (isNaN(f.from) && isNaN(f.to))) {
+    if (f.type === 'range' && isNaN(f.from) && isNaN(f.to)) {
       delete filters[cat];
     }
   }
@@ -427,7 +435,7 @@ function getActiveFilters() {
 }
 
 /**
- * Check if each item matches all active filters
+ * Check each item against the active filters.
  */
 function checkItemAgainstFilters(fields, filters) {
   for (const cat in filters) {
@@ -436,25 +444,21 @@ function checkItemAgainstFilters(fields, filters) {
 
     if (filter.type === 'text') {
 
-      // ================ WILDCARD ADDITION HERE ================
+      // 1) Wildcard logic:
       if (cat === '*') {
-        // For wildcard, we combine ALL fields in "fields"
         let combinedText = Object.keys(fields)
-          .map(k => fields[k].join(' ')) // fields[k] is array of text
+          .map(k => fields[k].join(' '))
           .join(' ')
-          .toLowerCase(); // ensure lowercase
-
-        // If user typed multiple search terms, all must appear
+          .toLowerCase(); // everything lower
         for (const typedTerm of filter.values) {
           if (!combinedText.includes(typedTerm)) {
             return false;
           }
         }
-        continue; // done checking wildcard, go to next cat
+        continue; // done with wildcard
       }
-      // ========================================================
 
-      // Normal category text logic
+      // 2) Normal text logic
       const logicMode = filter.logic || 'OR';
       if (filter.values.length > 1) {
         if (logicMode === 'AND') {
@@ -464,7 +468,6 @@ function checkItemAgainstFilters(fields, filters) {
             }
           }
         } else {
-          // OR
           let match = false;
           for (const val of filter.values) {
             if (itemValues.some(iv => iv.includes(val))) {
@@ -475,7 +478,6 @@ function checkItemAgainstFilters(fields, filters) {
           if (!match) return false;
         }
       } else if (filter.values.length === 1) {
-        // single value
         const searchTerm = filter.values[0];
         const combined = itemValues.join(' ');
         if (!combined.includes(searchTerm)) return false;
@@ -499,13 +501,13 @@ function checkItemAgainstFilters(fields, filters) {
 }
 
 /**
- * Build or update active tags
+ * Update (or build) the active tags in the UI.
  */
 function updateActiveTags(filters) {
   const tagsWrapper = document.querySelector('[custom-filter-tags="wrapper"]');
   if (!tagsWrapper) return;
 
-  // Clear old tags
+  // Remove old tags
   tagsWrapper.querySelectorAll('[custom-filter-tag="active"]').forEach(tag => tag.remove());
 
   const template = tagsWrapper.querySelector('[custom-filter-tag="template"]');
@@ -515,17 +517,17 @@ function updateActiveTags(filters) {
     const filter = filters[cat];
 
     if (filter.type === 'text') {
-      // If it's '*', we skip normal logic or just show the typed search
+      // If it's the wildcard:
       if (cat === '*') {
-        // e.g. user typed "beach"
-        // filter.values might have multiple terms if you want multi-phrase
+        // Show each typed term as a separate tag
         filter.values.forEach(searchTerm => {
           const newTag = createTagElement(template, cat, searchTerm, false, null);
           tagsWrapper.appendChild(newTag);
         });
-        continue;
+        continue; 
       }
 
+      // Normal text-based (checkbox or input)
       filter.values.forEach((val, i) => {
         const inputId = filter.ids?.[i] || null;
         const newTag = createTagElement(template, cat, val, false, inputId);
@@ -536,34 +538,30 @@ function updateActiveTags(filters) {
       const fromVal = !isNaN(filter.from) ? filter.from : '';
       const toVal   = !isNaN(filter.to)   ? filter.to   : '';
 
-      // Possibly detect minonly
+      // Check if it's minonly
       const sliderEl = document.querySelector(`.my-range-slider[data-slider-category="${cat}"]`);
-      const mode     = sliderEl?.getAttribute('data-slider-mode') || 'range';
-      const label    = sliderEl?.getAttribute('data-slider-tagname') || cat;
+      const mode = sliderEl?.getAttribute('data-slider-mode') || 'range';
+      const label= sliderEl?.getAttribute('data-slider-tagname') || cat;
 
       let displayText;
       if (mode === 'minonly') {
-        // single
-        const val = fromVal || '...';
-        displayText = `Min ${label}: ${val}`;
+        // Single value
+        displayText = `Min ${label}: ${fromVal || '...'}`;
       } else {
-        // two-handle
         displayText = `${label}: ${fromVal || '...'} - ${toVal || '...'}`;
       }
-
       const newTag = createTagElement(template, cat, displayText, true);
       tagsWrapper.appendChild(newTag);
     }
-    else if (cat === '*') {
-      // If we didn't handle above, we can do it here
-      filter.values.forEach(searchTerm => {
-        const newTag = createTagElement(template, cat, searchTerm);
-        tagsWrapper.appendChild(newTag);
-      });
-    }
+    // Could also handle cat === '*'
+    // but above logic handles it
   }
 }
 
+/**
+ * Create a cloned tag from the template.
+ * For checkboxes, we store inputId so removing the tag can uncheck that box.
+ */
 function createTagElement(template, cat, val, isRangeOrDate = false, inputId = null) {
   const newTag = template.cloneNode(true);
   newTag.setAttribute('custom-filter-tag', 'active');
@@ -592,17 +590,17 @@ function createTagElement(template, cat, val, isRangeOrDate = false, inputId = n
 }
 
 /**
- * Remove a single text-based filter (e.g. a checkbox)
+ * Remove a single text-based filter (like a checkbox).
  */
 function removeFilterValue(category, value, uniqueId = null) {
   console.log('[DEBUG] removeFilterValue ->', category, value, uniqueId);
 
   if (uniqueId) {
+    // Uncheck the specific input by ID
     const input = document.getElementById(uniqueId);
     if (input) {
-      // Uncheck
       input.checked = false;
-      // Remove w--redirected-checked
+      // Remove Webflow styling
       const labelEl = input.closest('label');
       if (labelEl) {
         const wfCheckboxDiv = labelEl.querySelector('.w-checkbox-input');
@@ -612,7 +610,7 @@ function removeFilterValue(category, value, uniqueId = null) {
       }
     }
   } else {
-    // fallback if no ID is stored
+    // fallback if no ID known
     const checkboxes = filterContainer.querySelectorAll('input[type="checkbox"], input[type="radio"]');
     checkboxes.forEach(input => {
       if (input.checked) {
@@ -628,7 +626,7 @@ function removeFilterValue(category, value, uniqueId = null) {
         }
       }
     });
-    // Also clear text if it matches
+    // Also clear any text input matches
     const inputs = filterContainer.querySelectorAll(
       `input[custom-filter-field*="${category}"]:not([type="checkbox"]):not([type="radio"]),
        select[custom-filter-field*="${category}"],
@@ -645,7 +643,7 @@ function removeFilterValue(category, value, uniqueId = null) {
 }
 
 /**
- * Remove date or range filter
+ * Remove a date or range filter
  */
 function removeFilterRangeOrDate(category) {
   console.log('[DEBUG] removeFilterRangeOrDate ->', category);
@@ -655,7 +653,7 @@ function removeFilterRangeOrDate(category) {
   if (fromInput) fromInput.value = '';
   if (toInput)   toInput.value   = '';
 
-  // Reset slider
+  // Reset slider if it exists
   const sliderEl = filterContainer.querySelector(`.my-range-slider[data-slider-category="${category}"]`);
   if (sliderEl && sliderEl.noUiSlider) {
     const mode = sliderEl.getAttribute('data-slider-mode') || 'range';
@@ -676,11 +674,11 @@ function removeFilterRangeOrDate(category) {
 function resetAllFilters() {
   console.log('[DEBUG] resetAllFilters');
 
-  // Uncheck all checkboxes
+  // Uncheck checkboxes
   const checkboxes = filterContainer.querySelectorAll('input[type="checkbox"], input[type="radio"]');
   checkboxes.forEach(input => {
     input.checked = false;
-    // remove w--redirected-checked class
+    // remove w--redirected-checked
     const labelEl = input.closest('label');
     if (labelEl) {
       const wfBoxDiv = labelEl.querySelector('.w-checkbox-input');
@@ -690,11 +688,15 @@ function resetAllFilters() {
     }
   });
 
-  // Clear text, select
+  // Clear text, select, etc.
   const inputs = filterContainer.querySelectorAll(
-    'input[custom-filter-field]:not([type="checkbox"]):not([type="radio"]), select[custom-filter-field], textarea[custom-filter-field]'
+    'input[custom-filter-field]:not([type="checkbox"]):not([type="radio"]), \
+     select[custom-filter-field], \
+     textarea[custom-filter-field]'
   );
-  inputs.forEach(input => { input.value = ''; });
+  inputs.forEach(input => {
+    input.value = '';
+  });
 
   // Reset sliders
   const sliderEls = filterContainer.querySelectorAll('.my-range-slider');
@@ -718,7 +720,7 @@ function resetAllFilters() {
 function clearCategoryFilter(category) {
   console.log('[DEBUG] clearCategoryFilter ->', category);
 
-  // Uncheck all relevant checkboxes
+  // Uncheck checkboxes
   const checkboxes = filterContainer.querySelectorAll('input[type="checkbox"], input[type="radio"]');
   checkboxes.forEach(input => {
     const labelEl = input.closest('label');
@@ -726,6 +728,7 @@ function clearCategoryFilter(category) {
     const spanEl = labelEl.querySelector(`[custom-filter-field*="${category}"]`);
     if (spanEl) {
       input.checked = false;
+      // remove w--redirected-checked
       const wfBoxDiv = labelEl.querySelector('.w-checkbox-input');
       if (wfBoxDiv && wfBoxDiv.classList.contains('w--redirected-checked')) {
         wfBoxDiv.classList.remove('w--redirected-checked');
@@ -733,13 +736,15 @@ function clearCategoryFilter(category) {
     }
   });
 
-  // Clear text
+  // Clear text inputs
   const inputs = filterContainer.querySelectorAll(
     `input[custom-filter-field*="${category}"]:not([type="checkbox"]):not([type="radio"]),
      select[custom-filter-field*="${category}"],
      textarea[custom-filter-field*="${category}"]`
   );
-  inputs.forEach(input => { input.value = ''; });
+  inputs.forEach(input => {
+    input.value = '';
+  });
 
   // Reset slider if present
   const sliderEl = filterContainer.querySelector(`.my-range-slider[data-slider-category="${category}"]`);
@@ -752,11 +757,10 @@ function clearCategoryFilter(category) {
       sliderEl.noUiSlider.set([minVal, maxVal]);
     }
   }
-
   applyFilters();
 }
 
-/** Utility for capitalizing. */
+/** Utility: capitalizes first letter. */
 function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
