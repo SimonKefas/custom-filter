@@ -789,6 +789,7 @@ function capitalize(str) {
  */
 function getSortValue() {
   const sortSelect = filterContainer.querySelector('[custom-filter-sort="true"]');
+  console.log(`Found ${sortSelect}`);
   if (!sortSelect) return null;
   const val = sortSelect.value.trim();
   if (!val) return null; 
