@@ -42,7 +42,6 @@ function initializeFilters() {
   }
 
   // 5) "Clear All" and "Clear Category" Buttons
-  // Make sure the button is inside filterContainer or modify the query if it's outside
   filterContainer.querySelectorAll('[custom-filter-clear="all"]').forEach(btn => {
     btn.addEventListener('click', () => {
       console.log('[DEBUG] "Clear All" button clicked');
@@ -58,6 +57,15 @@ function initializeFilters() {
       applyFilters();
     });
   });
+
+  // SORTING ADDITIONS: If you have a <select> (or any input) for sorting:
+  const sortSelect = filterContainer.querySelector('[custom-filter-sort="true"]');
+  if (sortSelect) {
+    sortSelect.addEventListener('change', () => {
+      console.log('[DEBUG] Sort changed to:', sortSelect.value);
+      applyFilters();
+    });
+  }
 
   // 6) Initial apply
   applyFilters();
@@ -316,30 +324,43 @@ function applyFilters() {
   console.log('[DEBUG] applyFilters() called.');
   listContainer.style.opacity = '0';
 
+  // 1) Get filters
   const activeFilters = getActiveFilters();
   console.log('[DEBUG] Active filters:', activeFilters);
 
-  let visibleCount = 0;
+  // 2) Filter items
+  let filteredItems = [];
   itemData.forEach(obj => {
     const matches = checkItemAgainstFilters(obj.fields, activeFilters);
     if (matches) {
-      obj.element.style.display = '';
-      visibleCount++;
+      filteredItems.push(obj);
     } else {
       obj.element.style.display = 'none';
     }
   });
 
-  // Totals
+  // 3) SORTING ADDITIONS: read sort value, then sort
+  const sortValue = getSortValue(); // e.g. "price-asc" or null
+  if (sortValue) {
+    sortItems(filteredItems, sortValue);
+  }
+
+  // 4) reorder in DOM + show them
+  reorderInDOM(filteredItems);
+
+  // 5) Update totals
+  const visibleCount = filteredItems.length;
   const totalResultsEl = document.querySelector('[custom-filter-total="results"]');
   if (totalResultsEl) totalResultsEl.textContent = visibleCount;
+
   const totalItemsEl = document.querySelector('[custom-filter-total="all"]');
   if (totalItemsEl) totalItemsEl.textContent = itemData.length;
 
-  // Empty state
+  // 6) Show/hide empty
   const emptyEl = document.querySelector('[custom-filter-empty="true"]');
   if (emptyEl) emptyEl.style.display = (visibleCount === 0) ? '' : 'none';
 
+  // 7) Update active tags
   updateActiveTags(activeFilters);
 
   requestAnimationFrame(() => listContainer.style.opacity = '1');
@@ -352,7 +373,7 @@ function applyFilters() {
 function getActiveFilters() {
   const filters = {};
 
-  // 1) Checkboxes/radios
+  // Checkboxes/radios
   const checkboxes = filterContainer.querySelectorAll('input[type="checkbox"], input[type="radio"]');
   checkboxes.forEach(input => {
     if (input.checked) {
@@ -443,22 +464,21 @@ function checkItemAgainstFilters(fields, filters) {
     const itemValues = fields[cat] || [];
 
     if (filter.type === 'text') {
-
-      // 1) Wildcard logic:
+      // If wildcard
       if (cat === '*') {
         let combinedText = Object.keys(fields)
           .map(k => fields[k].join(' '))
           .join(' ')
-          .toLowerCase(); // everything lower
+          .toLowerCase();
         for (const typedTerm of filter.values) {
           if (!combinedText.includes(typedTerm)) {
             return false;
           }
         }
-        continue; // done with wildcard
+        continue;
       }
 
-      // 2) Normal text logic
+      // Normal text logic
       const logicMode = filter.logic || 'OR';
       if (filter.values.length > 1) {
         if (logicMode === 'AND') {
@@ -517,17 +537,16 @@ function updateActiveTags(filters) {
     const filter = filters[cat];
 
     if (filter.type === 'text') {
-      // If it's the wildcard:
+      // If wildcard
       if (cat === '*') {
-        // Show each typed term as a separate tag
         filter.values.forEach(searchTerm => {
           const newTag = createTagElement(template, cat, searchTerm, false, null);
           tagsWrapper.appendChild(newTag);
         });
-        continue; 
+        continue;
       }
 
-      // Normal text-based (checkbox or input)
+      // Normal text-based
       filter.values.forEach((val, i) => {
         const inputId = filter.ids?.[i] || null;
         const newTag = createTagElement(template, cat, val, false, inputId);
@@ -538,14 +557,12 @@ function updateActiveTags(filters) {
       const fromVal = !isNaN(filter.from) ? filter.from : '';
       const toVal   = !isNaN(filter.to)   ? filter.to   : '';
 
-      // Check if it's minonly
       const sliderEl = document.querySelector(`.my-range-slider[data-slider-category="${cat}"]`);
       const mode = sliderEl?.getAttribute('data-slider-mode') || 'range';
       const label= sliderEl?.getAttribute('data-slider-tagname') || cat;
 
       let displayText;
       if (mode === 'minonly') {
-        // Single value
         displayText = `Min ${label}: ${fromVal || '...'}`;
       } else {
         displayText = `${label}: ${fromVal || '...'} - ${toVal || '...'}`;
@@ -553,8 +570,6 @@ function updateActiveTags(filters) {
       const newTag = createTagElement(template, cat, displayText, true);
       tagsWrapper.appendChild(newTag);
     }
-    // Could also handle cat === '*'
-    // but above logic handles it
   }
 }
 
@@ -764,4 +779,58 @@ function clearCategoryFilter(category) {
 function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// =================== SORTING ADDITIONS ===================
+
+/**
+ * Returns the current sort value from a <select custom-filter-sort="true">,
+ * for example "price-asc" or null if none is selected.
+ */
+function getSortValue() {
+  const sortSelect = filterContainer.querySelector('[custom-filter-sort="true"]');
+  if (!sortSelect) return null;
+  const val = sortSelect.value.trim();
+  if (!val) return null; 
+  // e.g. "price-asc"
+  return val;
+}
+
+/**
+ * Sorts the array of item objects in place, given a sortValue like "price-asc".
+ * If numeric parse is possible, we do numeric sort; otherwise string sort.
+ */
+function sortItems(filteredItems, sortValue) {
+  const [field, dir] = sortValue.split('-'); // e.g. "price-asc" => field="price", dir="asc"
+
+  filteredItems.sort((a, b) => {
+    const aVal = a.fields[field]?.[0] || '';
+    const bVal = b.fields[field]?.[0] || '';
+
+    // Try numeric parse
+    const aNum = parseFloat(aVal);
+    const bNum = parseFloat(bVal);
+
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      // numeric
+      return (dir === 'asc') ? (aNum - bNum) : (bNum - aNum);
+    } else {
+      // fallback string
+      if (dir === 'asc') {
+        return aVal.localeCompare(bVal);
+      } else {
+        return bVal.localeCompare(aVal);
+      }
+    }
+  });
+}
+
+/**
+ * Re-injects the sorted items into the DOM, setting display="" so they appear.
+ */
+function reorderInDOM(sortedItems) {
+  sortedItems.forEach(itemObj => {
+    listContainer.appendChild(itemObj.element);
+    itemObj.element.style.display = '';
+  });
 }
