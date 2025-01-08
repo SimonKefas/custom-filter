@@ -788,8 +788,8 @@ function capitalize(str) {
  * for example "price-asc" or null if none is selected.
  */
 function getSortValue() {
-  const sortSelect = filterContainer.querySelector('[custom-filter-sort="true"]');
-  console.log(`Found ${sortSelect}`);
+  const sortSelect = document.querySelector('[custom-filter-sort="true"]');
+  console.log(`Element found:`, sortSelect);
   if (!sortSelect) return null;
   const val = sortSelect.value.trim();
   if (!val) return null; 
