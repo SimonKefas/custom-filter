@@ -1,144 +1,182 @@
-# Filter System: Auto-Population + Range Sliders + AND/OR Checkbox Logic
+# Filter + Sorting Solution
 
-This solution provides a **comprehensive filter system** for a Webflow-like or custom HTML environment. It **auto-populates** select menus, checkboxes, or radios based on **unique data values** in your item list, offers **range sliders** for numeric fields, and supports toggling between **“AND”** (match all) and **“OR”** (match any) logic for multi-checked categories. It can also **skip empty** data values to avoid generating blank filter options.
+A **comprehensive** JavaScript solution that supports:
 
-## Key Features
+1. **Wildcard Search** (`custom-filter-field="*"`) to search across all fields.  
+2. **Min-Only or Range Sliders** (`data-slider-mode="minonly"` or `"range"`) with custom tooltips and naming.  
+3. **Checkbox AND/OR** Logic (`data-checkbox-logic="all"` => AND, default => OR).  
+4. **Unique ID** linking checkboxes to active tags, so removing a tag unchecks the correct box and removes Webflow’s `w--redirected-checked` class.  
+5. **Clear All** (`custom-filter-clear="all"`) or clear single category.  
+6. **Sorting** via a select with attribute `[custom-filter-sort="true"]`, allowing ascending or descending sorts of numeric or text fields.
 
-1. **Auto-Populating Filters**  
-   - For each category (e.g. `"city"`, `"season"`), the script gathers **unique** values from your items.  
-   - You can choose:
-     - **Simple** approach (e.g., auto-populating a `<select>` or building checkboxes from scratch).  
-     - **Template-based** approach, where you create a single, styled label + input inside `[data-auto-template-item]`, and the script **clones** it for each unique data value.
+## Table of Contents
 
-2. **Skipping Empty Values**  
-   - If your data might contain blank strings (`""` or `" "`), the script automatically **omits** them from the filter UI, preventing confusing empty entries.
-
-3. **Min-Only or Range Sliders**  
-   - Use `.my-range-slider` with `data-slider-mode="range"` for **two-handle** or `data-slider-mode="minonly"` for a **single-handle** “at least X” slider.  
-   - Tooltips are customizable via `data-tooltip="km"`, `data-tooltip="beds"`, etc.
-
-4. **“AND” vs. “OR” Logic** for Checkboxes  
-   - Normally, checking multiple boxes in the same category means “Show items matching **any** of these” (OR).  
-   - By adding `data-checkbox-logic="all"` on the container (the element with `custom-filter-auto="yourCategory"`), it switches to **AND** mode—items must match **all** checked values.
-
-5. **General Filtering**  
-   - Each item has `[custom-filter-field="category"]` with text for that category. The script matches user-selected filters (checkboxes, select, text inputs, range sliders) against each item.  
-   - Items that match all filters remain visible; others are hidden.  
-   - A `[custom-filter-empty="true"]` element can display “No items found” if everything is filtered out.
-
-6. **Active Tags & Removal**  
-   - `[custom-filter-tags="wrapper"]` can display “active tags.” The script clones `[custom-filter-tag="template"]` for each active filter.  
-   - Clicking a tag’s remove button unchecks or clears that filter, then re-applies.
+1. [Basic Setup](#basic-setup)  
+2. [Wildcard Search](#wildcard-search)  
+3. [Checkbox AND/OR Logic](#checkbox-andor-logic)  
+4. [Min-Only or Range Sliders](#min-only-or-range-sliders)  
+5. [Sorting Implementation](#sorting-implementation)  
+6. [Clear All & Clear Category](#clear-all--clear-category)  
+7. [Active Tags & Removal](#active-tags--removal)  
+8. [Advanced Notes](#advanced-notes)
 
 ---
 
-## Getting Started
+## Basic Setup
 
-1. **Add Your Items**  
-   - Place your repeatable items inside `[custom-filter="list"]`.  
-   - Each item should have `[custom-filter-item]`.  
-   - For every relevant field, add `[custom-filter-field="category"]`. For instance:
-     ```html
-     <div custom-filter-item>
-       <div custom-filter-field="city">Lisbon</div>
-       <div custom-filter-field="season">summer</div>
-       <div custom-filter-field="beds">2</div>
-     </div>
-     ```
+### HTML Structure
 
-2. **Design Your Filters** in `[custom-filter="filters"]`.  
-   - **Auto-Populated**:  
-     - `custom-filter-auto="beds"` with `data-auto-type="checkbox"` or `"select"`.  
-     - If using a **template-based** approach, place one hidden element (e.g., a label with `[data-auto-template-item]`) that the script will clone.  
-   - **Sliders**:  
-     - Add a container: `<div class="my-range-slider" data-slider-category="beds" data-slider-mode="range" data-tooltip="beds"></div>`  
-     - Also add hidden inputs:  
-       ```html
-       <input type="hidden" custom-filter-field="beds" custom-filter-range="from">
-       <input type="hidden" custom-filter-field="beds" custom-filter-range="to">
-       ```
+- **`[custom-filter="filters"]`**: A container holding all your filters (checkboxes, text inputs, slider, etc.), plus buttons like “Clear All.”  
+- **`[custom-filter="list"]`**: A container holding your repeated items, each with `[custom-filter-item]`.  
+- **`[custom-filter-field="category"]`**: On an element inside each item, containing text that belongs to a certain category (e.g., `"price"`, `"title"`, `"season"`).  
 
-3. **Skipping Empty Values**  
-   - No extra setup needed. By default, the code checks `if (!val.trim()) return;` and omits blank entries.
-
-4. **"AND" Checkbox Logic**  
-   - Add `data-checkbox-logic="all"` on the same container that has `custom-filter-auto="myCategory"` if you want items to match **all** checked values in that category.  
-   - Omit or use `data-checkbox-logic="any"` (or none) for **OR** logic.
-
-5. **Active Tag Wrapper**  
-   - Add `[custom-filter-tags="wrapper"]` somewhere.  
-   - Inside it, place one element `[custom-filter-tag="template"]` with a child `[custom-filter-tag-text="true"]` for the filter name and `[custom-filter-tag-remove="true"]` for a remove button. This gets cloned per active filter.
-
-6. **Initialization**  
-   - After your data is loaded (e.g., `wized.onData(() => { initializeFilters(); })`), call `initializeFilters()`.  
-   - The script collects your items, populates filters, sets up sliders, and applies filters.
-
----
-
-## Usage Notes & Tips
-
-- **Multiple Categories**: Each item can have multiple `[custom-filter-field]` attributes if needed, or a single `[custom-filter-field="category1, category2"]`.  
-- **Wildcards**: Use `[custom-filter-field="*"]` on a text input to search across **all** fields.  
-- **Min-Only Sliders**: `'minonly'` mode sets the upper value to `Number.MAX_SAFE_INTEGER` internally.  
-- **Performance**: The code re-checks each item on every input/change. For large datasets, consider debouncing or optimizing if needed.  
-- **Empty State**: The `[custom-filter-empty="true"]` element is shown if no items remain visible.
-
----
-
-## Example Markup
+Example:
 
 ```html
 <!-- Filters -->
 <div custom-filter="filters">
-  <!-- Auto-populate checkboxes for "season" (AND logic) -->
-  <div custom-filter-auto="season" data-auto-type="checkbox" data-checkbox-logic="all">
-    <!-- If using template: 
-         <label style="display:none;" data-auto-template-item> ... </label>
-    -->
+  <!-- Example of a wildcard search input -->
+  <input type="text" custom-filter-field="*" placeholder="Search all fields..." />
+
+  <!-- Example checkbox container with auto-population -->
+  <div custom-filter-auto="season" data-auto-type="checkbox"></div>
+
+  <!-- Example slider (distance) -->
+  <div class="my-range-slider"
+       data-slider-category="distance"
+       data-slider-mode="range"
+       data-tooltip="km"
+       data-slider-tagname="Distance">
   </div>
+  <input type="hidden" custom-filter-field="distance" custom-filter-range="from" />
+  <input type="hidden" custom-filter-field="distance" custom-filter-range="to" />
 
-  <!-- A slider for "beds" (minonly) -->
-  <div class="my-range-slider" data-slider-category="beds" data-slider-mode="minonly" data-tooltip="beds"></div>
-  <input type="hidden" custom-filter-field="beds" custom-filter-range="from">
-  <input type="hidden" custom-filter-field="beds" custom-filter-range="to">
+  <!-- Sorting select -->
+  <select custom-filter-sort="true">
+    <option value="">No Sorting</option>
+    <option value="price-asc">Price (low to high)</option>
+    <option value="price-desc">Price (high to low)</option>
+    <option value="title-asc">Title (A-Z)</option>
+    <option value="title-desc">Title (Z-A)</option>
+  </select>
 
-  <!-- Clear buttons, active tags, etc. -->
-  <button custom-filter-clear="all">Clear All</button>
+  <!-- Clear All button -->
+  <button type="button" custom-filter-clear="all">Clear All</button>
+
+  <!-- Active tags -->
   <div custom-filter-tags="wrapper">
     <div custom-filter-tag="template" style="display:none;">
       <span custom-filter-tag-text="true"></span>
-      <button custom-filter-tag-remove="true">x</button>
+      <button type="button" custom-filter-tag-remove="true">x</button>
     </div>
   </div>
 </div>
 
-<!-- Item List -->
+<!-- Item list -->
 <div custom-filter="list">
   <div custom-filter-item>
     <div custom-filter-field="season">summer</div>
-    <div custom-filter-field="beds">2</div>
-    <!-- ... -->
+    <div custom-filter-field="distance">200</div>
+    <div custom-filter-field="price">99</div>
+    <div custom-filter-field="title">Beach Tour</div>
   </div>
-  <!-- More items... -->
+  <!-- more items... -->
 </div>
 
-<!-- Totals -->
+<!-- Totals & empty state -->
 <div>Total Results: <span custom-filter-total="results"></span></div>
 <div>Total Items: <span custom-filter-total="all"></span></div>
-
-<!-- Empty state -->
 <div custom-filter-empty="true" style="display:none;">No items found</div>
 ```
 
 ---
 
-## Concluding Remarks
+## Wildcard Search
 
-With this setup, you can:
+- **`[custom-filter-field="*"]`** on an input/textarea/select means the user-typed text is used to search **all** fields in each item.  
+- The script combines all text from every category into one big lowercase string, then checks if the typed text is included.  
+- If you want multi-term searching, the script can interpret multiple spaced words as separate terms. This is easily customized.
 
-- **Automatically generate** checkbox/radio options or `<option>` tags from your items, skipping any empty values.  
-- **Use** single or double handle sliders for numeric fields (distance, price, etc.).  
-- **Decide** if multiple checkboxes in the same category require **“any match”** (OR) or **“all match”** (AND).  
-- **Easily** manage active tags and toggling filters.
+---
 
-This approach allows you to build a highly flexible, user-friendly filtering system for Webflow, Wized, or any custom HTML environment.
+## Checkbox AND/OR Logic
+
+- By default, if the user checks multiple boxes in the same category, the item can match **any** of them (OR logic).  
+- If you set `data-checkbox-logic="all"` on the container that has `[custom-filter-auto="category"]`, the item must match **all** selected values (AND logic).  
+- Example:
+  ```html
+  <div
+    custom-filter-auto="season"
+    data-auto-type="checkbox"
+    data-checkbox-logic="all"
+  ></div>
+  ```
+  Items must have all selected seasons (e.g., if the item’s `season` field can hold multiple values like “summer, winter”).
+
+---
+
+## Min-Only or Range Sliders
+
+- If you want a **single-handle** slider (like “min price”), set `data-slider-mode="minonly"`. The script sets the “to” internally to a large number (`Number.MAX_SAFE_INTEGER`), effectively meaning “≥ from value.”  
+- If you want a **two-handle** slider, use `data-slider-mode="range"`. The user can pick both a minimum and maximum.  
+- The script listens to slider changes, updates hidden inputs (`[custom-filter-field="price"][custom-filter-range="from"]`), etc., and re-filters items.
+
+---
+
+## Sorting Implementation
+
+1. **Sorting Select**:  
+   - Add a `<select custom-filter-sort="true">` with options like `"price-asc"`, `"price-desc"`, etc.  
+   - Example:
+     ```html
+     <select custom-filter-sort="true">
+       <option value="">No Sorting</option>
+       <option value="price-asc">Price (low to high)</option>
+       <option value="price-desc">Price (high to low)</option>
+       <option value="title-asc">Title (A-Z)</option>
+       <option value="title-desc">Title (Z-A)</option>
+     </select>
+     ```
+2. **After Filtering**:  
+   - The script obtains the user’s chosen sort (e.g. `"price-asc"`) and sorts only the **filtered** items.  
+   - Numeric fields (like `price`) are sorted numerically if parseable; else we do a **string** compare.  
+   - Then we **re-inject** the items in the DOM in the new order, ensuring they appear sorted on the page.
+
+---
+
+## Clear All & Clear Category
+
+- **Clear All**: A button with `[custom-filter-clear="all"]` calls `resetAllFilters()`, unchecking all boxes, clearing all text, and resetting sliders.  
+- **Clear a Category**: A button with `[custom-filter-clear="price"]` (for example) unchecks or clears only that category’s inputs.
+
+---
+
+## Active Tags & Removal
+
+- The script uses `[custom-filter-tags="wrapper"]` to display the user’s **active filters** (like checkboxes, text searches, or range sliders).  
+- A hidden template `[custom-filter-tag="template"]` is cloned for each active filter.  
+- Removing a tag calls a function (like `removeFilterValue()`), which unchecks the corresponding input or slider range and re-applies filters.
+
+### Linking Checkboxes
+
+- Each **checkbox** is given a unique ID (`checkbox-[category]-[index]`).  
+- The active tag for that checkbox stores the same ID. Removing the tag unchecks that exact box and removes the Webflow styling class (`w--redirected-checked`).
+
+---
+
+## Advanced Notes
+
+- If you have **very large** item lists, consider more efficient re-rendering strategies or pagination. This script, by default, just hides or shows items in the DOM and reorders them on sorting.  
+- If you want to **remember** the user’s filter/sort selection across pages, you can store them in the URL or localStorage and reapply on page load.  
+- The solution is **highly customizable**: you can rename attributes, fields, logic, or the approach to sorting as needed.
+
+---
+
+### Conclusion
+
+With this code + README:
+
+- **Filtering** includes wildcard search, date/range logic, min-only sliders, checkbox AND/OR logic, etc.  
+- **Sorting** is optional but easy to implement with `[custom-filter-sort="true"]` and some custom `<option value="field-asc/desc">` entries.  
+- **Clearing** is done via `[custom-filter-clear="all"]` or `[custom-filter-clear="category"]`.  
+- **Tags** show the user’s active filters and let them remove individually or all at once.
