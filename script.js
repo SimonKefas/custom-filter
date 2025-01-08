@@ -27,21 +27,19 @@ function initializeFilters() {
   // 3) Setup range sliders
   setupRangeSliders();
 
-  // 4) Listen for input/change
+  // 4) Listen for input/change in the filter container
   const formHasSubmit = filterContainer.querySelector('[custom-filter-submit="true"]');
   if (formHasSubmit) {
-    // If you have a form-based approach
     filterContainer.addEventListener('submit', e => {
       e.preventDefault();
       applyFilters();
     });
   } else {
-    // Otherwise, filter on any input/change event
     filterContainer.addEventListener('input', () => applyFilters());
     filterContainer.addEventListener('change', () => applyFilters());
   }
 
-  // 5) "Clear All" and "Clear Category" Buttons
+  // 5) Clear All / Clear Category
   filterContainer.querySelectorAll('[custom-filter-clear="all"]').forEach(btn => {
     btn.addEventListener('click', () => {
       console.log('[DEBUG] "Clear All" button clicked');
@@ -58,11 +56,12 @@ function initializeFilters() {
     });
   });
 
-  // SORTING ADDITIONS: If you have a <select> (or any input) for sorting:
-  const sortSelect = filterContainer.querySelector('[custom-filter-sort="true"]');
+  // [SORTING OUTSIDE FILTER CONTAINER]
+  // If your sort select is outside [custom-filter="filters"], do a global query:
+  const sortSelect = document.querySelector('[custom-filter-sort="true"]');
   if (sortSelect) {
     sortSelect.addEventListener('change', () => {
-      console.log('[DEBUG] Sort changed to:', sortSelect.value);
+      console.log('[DEBUG] Global sort changed to:', sortSelect.value);
       applyFilters();
     });
   }
@@ -92,8 +91,8 @@ function collectItemData(container) {
 }
 
 /**
- * Auto-populate filters (e.g. a <select>, or checkboxes/radios),
- * skipping empty data values. Optionally use data-auto-template.
+ * Auto-populate filters (checkbox/radio/select),
+ * skipping empty data values, plus optional template-based approach.
  */
 function setupAutoPopulatedFilters() {
   const autoFilters = filterContainer.querySelectorAll('[custom-filter-auto]');
@@ -339,7 +338,7 @@ function applyFilters() {
     }
   });
 
-  // 3) SORTING ADDITIONS: read sort value, then sort
+  // 3) SORTING ADDITIONS: read sort value (globally), then sort
   const sortValue = getSortValue(); // e.g. "price-asc" or null
   if (sortValue) {
     sortItems(filteredItems, sortValue);
@@ -784,17 +783,16 @@ function capitalize(str) {
 // =================== SORTING ADDITIONS ===================
 
 /**
- * Returns the current sort value from a <select custom-filter-sort="true">,
+ * Returns the current sort value from a global <select custom-filter-sort="true">,
  * for example "price-asc" or null if none is selected.
  */
 function getSortValue() {
+  // Query globally, not within filterContainer
   const sortSelect = document.querySelector('[custom-filter-sort="true"]');
-  console.log(`Element found:`, sortSelect);
   if (!sortSelect) return null;
   const val = sortSelect.value.trim();
   if (!val) return null; 
-  // e.g. "price-asc"
-  return val;
+  return val;  // e.g. "price-asc"
 }
 
 /**
@@ -827,7 +825,7 @@ function sortItems(filteredItems, sortValue) {
 }
 
 /**
- * Re-injects the sorted items into the DOM, setting display="" so they appear.
+ * Re-injects the sorted items into the DOM, setting display=""
  */
 function reorderInDOM(sortedItems) {
   sortedItems.forEach(itemObj => {
