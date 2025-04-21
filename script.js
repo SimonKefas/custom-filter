@@ -130,9 +130,12 @@ function autoPopulateSimple(autoEl, category, autoType, sortedValues) {
     if (autoEl.tagName.toLowerCase() === 'select') {
       autoEl.innerHTML = '';
       // Insert a default placeholder
+      const placeholderText = autoEl.getAttribute('data-placeholder') || `Choose ${capitalize(category)}`;
       const def = document.createElement('option');
       def.value = '';
-      def.textContent = 'Alle';  // or "All", "Select"
+      def.textContent = placeholderText;
+      def.disabled = true;
+      def.selected = true;
       autoEl.appendChild(def);
 
       sortedValues.forEach((val, index) => {
