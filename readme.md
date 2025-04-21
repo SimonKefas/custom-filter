@@ -24,6 +24,11 @@ A **comprehensive** JavaScript solution that supports:
 
 ## Basic Setup
 
+Include the script:
+```html
+<script src="https://cdn.jsdelivr.net/gh/SimonKefas/custom-filter@latest/script.js"></script>
+```
+
 ### HTML Structure
 
 - **`[custom-filter="filters"]`**: A container holding all your filters (checkboxes, text inputs, slider, etc.), plus buttons like “Clear All.”  
