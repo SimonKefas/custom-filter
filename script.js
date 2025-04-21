@@ -130,7 +130,7 @@ function autoPopulateSimple(autoEl, category, autoType, sortedValues) {
     if (autoEl.tagName.toLowerCase() === 'select') {
       autoEl.innerHTML = '';
       // Insert a default placeholder
-      const placeholderText = autoEl.getAttribute('data-placeholder') || `Velg ${capitalize(category)}`;
+      const placeholderText = autoEl.getAttribute('data-placeholder') || `Choose ${capitalize(category)}`;
       const def = document.createElement('option');
       def.value = '';
       def.textContent = placeholderText;
