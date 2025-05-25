@@ -680,6 +680,8 @@ function reorderInDOM(sortedItems) {
   });
 }
 
+document.addEventListener('DOMContentLoaded', initializeFilters);
+
 /* ───────────── BOOTSTRAP (optional) ────────────────────────────────
    If you prefer automatic init when the page is ready, uncomment:
    -------------------------------------------------------------------
